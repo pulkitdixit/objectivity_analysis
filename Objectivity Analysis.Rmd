@@ -1,0 +1,1330 @@
+---
+title: "Comparison of Different Statistical Learning Models on the Sports Articles for Objectivity Analysis Dataset"
+author: "Team Paranormal Curve : Dongyup Lee, Liam Shannon, Pulkit Dixit"
+date: "12/3/2018"
+output:
+  prettydoc::html_pretty:
+    theme: architect
+    highlight: github
+---
+
+#### Members  
+
+Dongyup Lee (Contact Person) / dlee126  
+Liam Shannon / lms2  
+Pulkit Dixit / pulkitd2  
+
+### Introduction  
+
+About the Dataset:  
+Dataset: "Sports Articles for objectivity analysis Dataset"  
+Library Used: University of Irvine - Machine Learning Repository  
+Link to the dataset: http://archive.ics.uci.edu/ml/datasets/Sports+articles+for+objectivity+analysis#
+(http://archive.ics.uci.edu/ml/datasets/Sports+articles+for+objectivity+analysis#)  
+
+#### Dataset Description and background information:  
+
+1000 sports articles were used as the source for creating the dataset. The zip source file on the UCL - ML repository contains the text for all the
+1000 articles. A separate summary file contains features generated through the Stanford POS tagger, which counts the frequencies of different parts of speech such as frequencies of punctuations, words, etc. For the purpose of this project, we will use the summary file (.csv) to create models to determine whether a given article is objective (based on facts) or subjective (based on feelings). Each article was manually labelled as objective or subjective using Amazon Mechanical Turk (objective/subjective), a crowdsourcing tool, and these labels will be assumed as the true values.The dataset contains 1000 rows (1 row per article) with 59 attributes per observation. There are no missing values to deal with. All the observations are of integer type. Out of the 59 attributes, 3 are scores of different kinds - semantic objectivity score, semantic subjectivity score and text complexity score. There are two attributes for sentence classes - first sentence class and last sentence class. All other variables are frequencies of different parts of sentencese such as full stops, commas, etc. or different parts of grammar like nouns, adverbs, etc. or special features like symbols, foreign words, quotes, etc.  The label column is called 'label' and consists of two values - objective and subjective. The remaining two columns are unique identifiers for each article - text ID and the URL of the article.  
+
+
+The number of news ariticles that we encounter was very limted in the past. The articles or information were either passed by the local newspaper companies or by the word of mouth. Those were just about every way the public could obtain new information. However, the status quo is just the opposite. Not only that there are thousands of newspaper companies and millions of online news article providers in the world. On top of that there are bloggers who create articles that we cannot neglect. With superflous amount of sources of information, it is imperative for the readers to have ways to distinguish credible information, find relevant articles and filter unwanted information.  
+
+
+Via sentiment analysis on the sports articles, the it makes it easier for the readers to find the kind of articles they want to read depending on the type of information or opinions they require. Our goal is to solve a binary classification problem. This project attempts to classify each article is either a subejctive article or an objective article. Determining whether a text is subjectve or objective is in itself very subjective matter. Each reader will have a slight difference in their standard of subjectivity. One of the challenge is to come up with a bottomline for what subjectivity is.  
+
+
+The demand of the sports articles range from entertainment and professional analysis purposes. Depending on what type of information the reader wants, it is important to filter the right kind of articles that meet their purposes. From this motive, our project team decided to build a model that could classify the pool of sports articles into objective article and subjective article. We will attempt to use various kinds of models ,gauge their accuracy and pick out the best model that would adequately classify the data. Our goal is to build a model that could be applied to various types of texts which would allow us to apply it to fields outside of sports articles. For now, we will use the sports article dataset to train and test our model.  
+
+#### Literature Review  
+
+Nadine Hajj, Yara Rizk, and Mariette Awad, 'A Subjectivity Classification Framework for Sports Articles using Cortical Algorithms for Feature Selection,' Springer Neural Computing and Applications, 2018.  
+
+While reading up on objectivity analysis we encountered a paper that demonstrated subjectivity analysis on a similar sports articles dataset. Their goal was to create an automatic subjective/objective classfier for articles based only on syntactic features. For each article, they used the Stanford POS tagger to count the frequencies of many different parts of speech and these were used as features for their classifier. They chose their features based on discussion with lnguistic experts about which parts of speech indicate subjectivity or objectivity. They trained a genetic algorithm classifier on a relatively smaller set of features compared to ours and ended up with a testing accuracy of 94.5%.  They extracted features from the articles and created genetic algorithm with syntactic features for subjective content analysis. They also had to extract punctuations, pronouns, verb tenses, adjectives and adverbs to classify objectivity and subjectivity.  
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Importing Libraries:  
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(dplyr)
+library(rpart)
+library(randomForest)
+library(gbm)
+library(xgboost)
+library(plotly)
+library(glmnet)
+library(e1071)
+library(MASS)
+library(svMisc)
+library(knitr)
+library(kableExtra)
+```
+
+### Data Import and Cleanup:  
+
+#### Importing Data:  
+
+The input file is a .csv file containing 1000 rows and 65 columns. *textID* and *url* are unique identifiers for each row. *label* is the column containing the classes to be predicted, and each following column is a variable.
+
+```{r include = FALSE, message=FALSE, warning=FALSE}
+#Importing data:
+my_data <- read.csv(file = "C:/Users/Pulkit Dixit/Downloads/STAT 432 Dataset/features_csv.csv", header=TRUE)
+```
+
+#### Cleaning Data:  
+
+The columns names in the source file were not clearly indicative of the data they represent. Hence, the first step after importing the data was to change the column names so that it became easier to understand the information they represent.  
+
+```{r include = FALSE, message=FALSE, warning=FALSE}
+#Renaming columns to make them more readable:
+colnames(my_data)[1:62] = c('textID', 
+                            'url', 
+                            'label', 
+                            'totalWordsCount', 
+                            'semanticObjScore', 
+                            'semanticSubScore',
+                            'freqCoordConjunction', 
+                            'freqNumeralsCardinal', 
+                            'freqDeterminer', 
+                            'freqExistentialThere', 
+                            'freqForeignWords', 'freqSubPrepConj', 
+                            'freqOrdinalAdjNum', 
+                            'freqComparativeAdj', 
+                            'freqSuperAdj', 
+                            'freqListItemMarker', 
+                            'freqModalAux', 
+                            'freqSingularComNoun', 
+                            'freqSingularPropNoun', 
+                            'freqPluralComNoun', 
+                            'freqPluralPropNoun', 
+                            'freqPreDeterminer', 
+                            'freqGenitiveMarker', 
+                            'freqPersonalPronoun', 
+                            'freqPossessivePronoun', 
+                            'freqAdverb', 
+                            'freqCompAdverb', 
+                            'freqSuperAdverb', 
+                            'freqParticle', 
+                            'freqSymbol', 
+                            'freqTo', 
+                            'freqInterjection', 
+                            'freqBaseFormVerb', 
+                            'freqPastTenseVerb', 
+                            'freqPresentParticiple', 
+                            'freqPastParticiple', 
+                            'freqPresentTenseVerbPlural', 
+                            'freqPresentTenseVerbSingular', 
+                            'freqWHDeterminer', 
+                            'freqWHPronoun', 
+                            'freqPossesiveWHPronoun', 
+                            'freqWHAdverbs', 
+                            'freqBaseForm', 
+                            'freqQuote', 
+                            'freqQuestionMark', 
+                            'freqExclamationMark', 
+                            'freqFullStop', 
+                            'freqComma', 
+                            'freqSemicolon', 
+                            'freqColon', 
+                            'freqEllipsis', 
+                            'freqPronounFirst', 
+                            'freqPronounSecond', 
+                            'freqPronounThird', 
+                            'freqCompSuperAdjAdv', 
+                            'freqPastThird', 
+                            'freqImperativeVerb', 
+                            'freqPresentThird', 
+                            'freqPresentFirstSecond', 
+                            'classFirstSentence', 
+                            'classLastSentence', 
+                            'textComplexityScore')
+```
+
+The next step is to check for NAs. *which(is.na(), arr.ind = TRUE)* was used for this purpose. It returns an *n x 2* matrix, where *n* represents the number of different combinations of rows and columns containing NAs. The code below returns *TRUE* if the *n* is 0 for the data, and returns *FALSE* if there exist combinations of rows and columns that contain NA values.  
+
+```{r message=FALSE, warning=FALSE}
+#Checking if rows that contain NA values:
+dim(which(is.na(my_data), arr.ind = TRUE))[1] == 0
+```
+
+As can be seen from the above output, there were no NA values in the data.
+
+The data also needs to be checked for duplicates. In the dataset, *textID* and *url* are unique identifiers since each row of the data set represents a unique link of an article from which data has been taken. The code below checks for the number of unique values for the two above mentioned columns.  
+
+```{r message=FALSE, warning=FALSE}
+#Finding the number of unique values of textID and url:
+#textID:
+length(unique(my_data$textID))
+
+#url:
+length(unique(my_data$url))
+```
+
+From the above results, url seems to have two duplicate values, but with different textID values. The below code groups the data by url and checks for the *label* and *totalWordsCount* of the rows. If they are different, it might be that the article might have been modified, and that data was collected for both versions of the article. Since there is no timestamp for the data, it has been assumed that if the word count and/or label for the same link are different, then they can be considered as two different articles.  
+
+```{r message=FALSE, warning=FALSE}
+my_data %>% 
+  dplyr::select(textID, url, label, totalWordsCount) %>%
+  group_by(url) %>% 
+  filter(n()>1) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+The above result shows *textID*, *url*, *label* and *totalWordsCount* for the 4 rows with duplicate *url* values. However, only one of those values has a true duplicate based on the assumption mentioned before. The code below removes the duplicate row.
+
+```{r message=FALSE, warning=FALSE}
+#Saving the duplicate rows in a new data frame:
+dup = my_data %>% 
+  dplyr::select(textID, url, label, totalWordsCount) %>% 
+  group_by(url, totalWordsCount, label) %>% 
+  filter(n()>1)
+
+#Converting textID to a number:
+dup$textID = as.numeric(substring(as.character(dup$textID), first = 5))
+
+#Selecting all values of text ID except the minimum value, so that those values can be deleted in the original data frame:
+dup = dup %>% 
+  dplyr::select(textID, url, label, totalWordsCount) %>% 
+  group_by(url, totalWordsCount, label) %>% 
+  filter(textID != min(textID))
+
+#Filtering the original data frame for all values of textID not in the data frame containing duplicate values:
+my_data = my_data %>%
+  filter(as.numeric(substring(as.character(my_data$textID), first = 5)) != dup$textID)
+
+#Checking again for duplicate values:
+my_data %>%
+  dplyr::select(textID, url, label, totalWordsCount) %>%
+  group_by(url, totalWordsCount, label) %>%
+  filter(n()>1)
+```
+
+As can be seen from the above output, there are now no duplicate rows in the dataset.  
+
+### Data Visualization and Summary Statistics:  
+
+This section contains visualizations to help understand the data better, identify important variables, and if need be, remove un-important variables.  
+
+Since the objective of the project is to classify sports articles as subjective or objective, it is important to understand the structure and composition of each type of article, and identify how they differ from one another. The features of the articles include frequencies of punctuations (fullstops, commas, etc.), symbols, quotes, foreign words as well as occurences of different parts of grammar such as nouns, pronouns, adjectives, adverbs, conjunctions, etc.  
+
+The authors of the paper cited in the literature review created models different parts of grammar as a reduced feature set. We have extended that approach to include other parts of speech such as punctuations and quotes as well, based on our suspicions that they can be differentiating factors when looking to classify articles as objective or subjective. In addition to the types of data mentioned before, data such as text complexity score, word count and semantic objectivity and subjectivy scores as also present as features, and we have used visualizations to determine the importance of such variables.  
+
+The semantic scores for subjectivity and ojectivity of the articles have been extracted from the Stanford POS Tagger. They assign scores to articles based on their content. Our intuition is that they are important factors in determining whether an article is subjective or objective. Similary, the text complexity scores would also come in handy since we believe that objective articles are short and simple, while subjective articles are more complex in terms of the language and parts of speech used. In addition to the text complexity scores, word counts would also be more for subjective articles since they are more descriptive in nature. The below visualization shows scatter plots for these measures, with different shapes and colors representing the two classes.  
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.width=9, fig.height=6}
+col.pallete = c('coral', 'lightskyblue2')
+symbol.pallete = c('circle-dot', 'cross')
+semantic.score = plot_ly(my_data, x = ~semanticObjScore, y = ~semanticSubScore, 
+                         color = ~label, colors = col.pallete, 
+                         symbol = ~label, symbols = symbol.pallete,
+                         legendgroup = ~label) %>% 
+  layout(showlegend = TRUE, 
+         xaxis = list(title = 'Semantic Objectivity Score',
+                      showline = TRUE), 
+         yaxis = list(title = 'Semantic Subjectivity Score',
+                      range = c(0,100)),
+         legend = list(x = 0.85, y = 0.95))
+word.count.complexity = plot_ly(my_data, x = ~totalWordsCount, y = ~textComplexityScore , 
+        color = ~label, colors = col.pallete, 
+        symbol = ~label, symbols = symbol.pallete,
+        legendgroup = ~label) %>% 
+  add_markers(showlegend = FALSE) %>%
+  layout(showlegend = TRUE,
+         xaxis = list(title = 'Word Count',
+                      showline = TRUE), 
+         yaxis = list(title = 'Text Complexity Score'))
+
+subplot(semantic.score, word.count.complexity, titleX = TRUE, titleY = TRUE) %>% 
+  layout(annotations = list(
+    list(x = 0.1 , y = 1.05, text = "Semantic Objectivity Score vs<br> Semantic Subjectivity Score", showarrow = F, xref='paper', yref='paper'),
+    list(x = 0.9 , y = 1.05, text = "Word Count vs<br> Text Complexity Score", showarrow = F, xref='paper', yref='paper'))
+)
+```
+
+The scatterplot for semantic subjectivity and objectivity scores indicates that subjective articles tend to have higher scores and objective articles tend to have lower scores. The magnitude of both scores seem to be the same for a class, though, contrary to our intuition. However, since the magnitude of the scores seem to be different for subjective and objective variables, these two features will ultimately end up helping in classifying the given articles. In the scatterplot to the right, it can clearly be seen the subjective articles are longer than their objective counterparts, indicating that word count will play a part in identifying the class of an article. Text complexity scores are much more variable for objective articles than for subjective articles and hence this feature, although not extremely important, will help in classification of articles that have extreme complexity scores.  
+
+The visualization below displays a comparison of punctuations for objective and subjective articles. Our intuition here is that since objective articles are concise and to-the-point, they would not contain multiple occurences of punctuations like commas, question marks and exclamation marks. In addition to this, they would be expected to contain multiple occurences of colons since they are aimed at displaying more factual information than subjective articles. On the other hand, since subjective articles are opinion based and emotionally driven, we expect that they'll contain more question marks, exclamation marks and commas than objective articles but less colons.  
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.width=9, fig.height=10}
+comma = plot_ly(my_data, alpha = 0.6) %>%
+      add_histogram(x = ~freqComma[my_data$label == 'objective'], name = 'Objective', 
+                    type="histogram", marker = list(color = 'rgb(174, 222, 239)')) %>%
+      add_histogram(x = ~freqComma[my_data$label == 'subjective'], name = 'Subjective', 
+                    type="histogram", marker = list(color = 'rgb(247, 220, 153)', opacity = 0.7)) %>%
+      layout(barmode = 'overlay',
+             xaxis = list(title = 'Frequency of Commas'),
+             legend = list(x = 0.9, y = 0.95))
+
+fullstop = plot_ly(my_data, alpha = 0.6) %>%
+      add_histogram(x = ~freqFullStop[my_data$label == 'objective'], name = 'Full Stop - Objective', 
+                    type="histogram", marker = list(color = 'rgb(174, 222, 239)'), 
+                    showlegend = FALSE) %>%
+      add_histogram(x = ~freqFullStop[my_data$label == 'subjective'], name = 'Full Stop - Subjective', 
+                    type="histogram", marker = list(color = 'rgb(247, 220, 153)', opacity = 0.7), 
+                    showlegend = FALSE) %>%
+      layout(barmode = 'overlay',
+             xaxis = list(title = 'Frequency of Full Stops'))
+
+colon = plot_ly(my_data, alpha = 0.6) %>%
+      add_histogram(x = ~freqColon[my_data$label == 'objective'], name = 'COlon - Objective', 
+                    type="histogram", marker = list(color = 'rgb(174, 222, 239)'), 
+                    showlegend = FALSE) %>%
+      add_histogram(x = ~freqColon[my_data$label == 'subjective'], name = 'Colon - Subjective', 
+                    type="histogram", marker = list(color = 'rgb(247, 220, 153)', opacity = 0.7), 
+                    showlegend = FALSE) %>%
+      layout(barmode = 'overlay',
+             xaxis = list(title = 'Frequency of Colons'))
+
+semicolon = plot_ly(my_data, alpha = 0.6) %>%
+      add_histogram(x = ~freqSemicolon[my_data$label == 'objective'], name = 'Semicolon - Objective', 
+                    type="histogram", marker = list(color = 'rgb(174, 222, 239)'), 
+                    showlegend = FALSE) %>%
+      add_histogram(x = ~freqSemicolon[my_data$label == 'subjective'], name = 'Semicolon - Subjective', 
+                    type="histogram", marker = list(color = 'rgb(247, 220, 153)', opacity = 0.7), 
+                    showlegend = FALSE) %>%
+      layout(barmode = 'overlay',
+             xaxis = list(title = 'Frequency of Semicolons'))
+
+questionmark = plot_ly(my_data, alpha = 0.6) %>%
+      add_histogram(x = ~freqQuestionMark[my_data$label == 'objective'], name = 'Question Mark - Objective', 
+                    type="histogram", marker = list(color = 'rgb(174, 222, 239)'), 
+                    showlegend = FALSE) %>%
+      add_histogram(x = ~freqQuestionMark[my_data$label == 'subjective'], name = 'Question Mark - Subjective', 
+                    type="histogram", marker = list(color = 'rgb(247, 220, 153)', opacity = 0.7), 
+                    showlegend = FALSE) %>%
+      layout(barmode = 'overlay',
+             xaxis = list(title = 'Frequency of Question Marks'))
+
+exclamationmark = plot_ly(my_data, alpha = 0.6) %>%
+      add_histogram(x = ~freqExclamationMark[my_data$label == 'objective'], name = 'Exclamation Mark - Objective', 
+                    type="histogram", marker = list(color = 'rgb(174, 222, 239)'), 
+                    showlegend = FALSE) %>%
+      add_histogram(x = ~freqExclamationMark[my_data$label == 'subjective'], name = 'Exclamation Mark - Subjective', 
+                    type="histogram", marker = list(color = 'rgb(247, 220, 153)', opacity = 0.7), 
+                    showlegend = FALSE) %>%
+      layout(barmode = 'overlay',
+             xaxis = list(title = 'Frequency of Exclamation Marks'))
+
+subplot(comma, fullstop, colon, semicolon, questionmark, exclamationmark, nrows = 3, titleX = TRUE, titleY = TRUE) %>%
+  layout(title = 'Comparison of Punctuations for <br>Objective and Subjective Articles')
+```
+
+As can be seen from the above visualization, our intuitions about commas, colons and question marks were correct, and these features are important given that their distributions are significantly different for the two classes of articles. Semicolons and exclamation marks do not provide such diverse information, and will thus not be included in our reduced feature set. Full stops also display significantly different distributions for the two classes, although it is not clear whether this is influenced by the word count or not. Regardless, we will include full stops in our reduced feature set. Other punctuations that are not visualized but excluded from the reduced feature set are ellipsis, particles and symbols due to reasons similar to those mentioned for semicolons above. Another important punctuation that is included is list item marker, since we believe that this punctuation would be used only in objective articles to display factual information, and is hence important in classifying articles.  
+
+The next visualization focuses on two parts of Engish grammar - nouns and participles. We expect common nouns to be used equally as much in both types of articles. We expect similar results for proper nouns as well, since articles about players would use their names equally as much. Participles, however, are used extensively in sports for describing the current form of a player (*has been* or *is going to*), and we expect them to be used in subjective articlese a lot more than in objective ones.  
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.width=9, fig.height=9}
+singularcommonnoun = plot_ly(my_data, type = 'violin') %>%
+                add_trace(
+                  x = ~label[my_data$label == 'objective'],
+                  y = ~freqSingularComNoun[my_data$label == 'objective'],
+                  showlegend = FALSE,
+                  box = list(
+                    visible = T
+                  ),
+                  meanline = list(
+                    visible = T
+                  ),
+                  line = list(
+                    color = 'rgb(202, 190, 247)', opacity = 0.7
+                  )
+                ) %>%
+                add_trace(
+                  x = ~label[my_data$label == 'subjective'],
+                  y = ~freqSingularComNoun[my_data$label == 'subjective'],
+                  showlegend = FALSE,
+                  box = list(
+                    visible = T
+                  ),
+                  meanline = list(
+                    visible = T
+                  ),
+                  line = list(
+                    color = 'rgb(147, 249, 109)', opacity = 0.7
+                  )
+                ) %>% 
+                layout(
+                  yaxis = list(
+                    zeroline = F,
+                    title = 'Frequency of Singular Common Nouns'
+                  ),
+                  xaxis = list(
+                    title = ''
+                  ),
+                  violinmode = 'group'
+                )
+
+singularpropernoun = plot_ly(my_data, type = 'violin') %>%
+                add_trace(
+                  x = ~label[my_data$label == 'objective'],
+                  y = ~freqSingularPropNoun[my_data$label == 'objective'],
+                  showlegend = FALSE,
+                  box = list(
+                    visible = T
+                  ),
+                  meanline = list(
+                    visible = T
+                  ),
+                  line = list(
+                    color = 'rgb(202, 190, 247)', opacity = 0.7
+                  )
+                ) %>%
+                add_trace(
+                  x = ~label[my_data$label == 'subjective'],
+                  y = ~freqSingularPropNoun[my_data$label == 'subjective'],
+                  showlegend = FALSE,
+                  box = list(
+                    visible = T
+                  ),
+                  meanline = list(
+                    visible = T
+                  ),
+                  line = list(
+                    color = 'rgb(147, 249, 109)', opacity = 0.7
+                  )
+                ) %>% 
+                layout(
+                  yaxis = list(
+                    zeroline = F,
+                    title = 'Frequency of Singular Proper Nouns'
+                  ),
+                  xaxis = list(
+                    title = ''
+                  ),
+                  violinmode = 'group'
+                )
+
+pluralcommonnoun = plot_ly(my_data, type = 'violin') %>%
+                add_trace(
+                  x = ~label[my_data$label == 'objective'],
+                  y = ~freqPluralComNoun[my_data$label == 'objective'],
+                  showlegend = FALSE,
+                  box = list(
+                    visible = T
+                  ),
+                  meanline = list(
+                    visible = T
+                  ),
+                  line = list(
+                    color = 'rgb(202, 190, 247)', opacity = 0.7
+                  )
+                ) %>%
+                add_trace(
+                  x = ~label[my_data$label == 'subjective'],
+                  y = ~freqPluralComNoun[my_data$label == 'subjective'],
+                  showlegend = FALSE,
+                  box = list(
+                    visible = T
+                  ),
+                  meanline = list(
+                    visible = T
+                  ),
+                  line = list(
+                    color = 'rgb(147, 249, 109)', opacity = 0.7
+                  )
+                ) %>% 
+                layout(
+                  yaxis = list(
+                    zeroline = F,
+                    title = 'Frequency of Plural Common Nouns'
+                  ),
+                  xaxis = list(
+                    title = ''
+                  ),
+                  violinmode = 'group'
+                )
+
+pluralpropernoun = plot_ly(my_data, type = 'violin') %>%
+                add_trace(
+                  x = ~label[my_data$label == 'objective'],
+                  y = ~freqPluralPropNoun[my_data$label == 'objective'],
+                  showlegend = FALSE,
+                  box = list(
+                    visible = T
+                  ),
+                  meanline = list(
+                    visible = T
+                  ),
+                  line = list(
+                    color = 'rgb(202, 190, 247)', opacity = 0.7
+                  )
+                ) %>%
+                add_trace(
+                  x = ~label[my_data$label == 'subjective'],
+                  y = ~freqPluralPropNoun[my_data$label == 'subjective'],
+                  showlegend = FALSE,
+                  box = list(
+                    visible = T
+                  ),
+                  meanline = list(
+                    visible = T
+                  ),
+                  line = list(
+                    color = 'rgb(147, 249, 109)', opacity = 0.7
+                  )
+                ) %>% 
+                layout(
+                  yaxis = list(
+                    zeroline = F,
+                    title = 'Frequency of Plural Proper Nouns'
+                  ),
+                  xaxis = list(
+                    title = ''
+                  ),
+                  violinmode = 'group'
+                )
+
+presentparticiple = plot_ly(my_data, type = 'violin') %>%
+                add_trace(
+                  x = ~label[my_data$label == 'objective'],
+                  y = ~freqPresentParticiple[my_data$label == 'objective'],
+                  showlegend = FALSE,
+                  box = list(
+                    visible = T
+                  ),
+                  meanline = list(
+                    visible = T
+                  ),
+                  line = list(
+                    color = 'rgb(202, 190, 247)', opacity = 0.7
+                  )
+                ) %>%
+                add_trace(
+                  x = ~label[my_data$label == 'subjective'],
+                  y = ~freqPresentParticiple[my_data$label == 'subjective'],
+                  showlegend = FALSE,
+                  box = list(
+                    visible = T
+                  ),
+                  meanline = list(
+                    visible = T
+                  ),
+                  line = list(
+                    color = 'rgb(147, 249, 109)', opacity = 0.7
+                  )
+                ) %>% 
+                layout(
+                  yaxis = list(
+                    zeroline = F,
+                    title = 'Frequency of Present Participles'
+                  ),
+                  xaxis = list(
+                    title = ''
+                  ),
+                  violinmode = 'group'
+                )
+
+pastparticiple = plot_ly(my_data, type = 'violin') %>%
+                add_trace(
+                  x = ~label[my_data$label == 'objective'],
+                  y = ~freqPastParticiple[my_data$label == 'objective'],
+                  showlegend = FALSE,
+                  box = list(
+                    visible = T
+                  ),
+                  meanline = list(
+                    visible = T
+                  ),
+                  line = list(
+                    color = 'rgb(202, 190, 247)', opacity = 0.7
+                  )
+                ) %>%
+                add_trace(
+                  x = ~label[my_data$label == 'subjective'],
+                  y = ~freqPastParticiple[my_data$label == 'subjective'],
+                  showlegend = FALSE,
+                  box = list(
+                    visible = T
+                  ),
+                  meanline = list(
+                    visible = T
+                  ),
+                  line = list(
+                    color = 'rgb(147, 249, 109)', opacity = 0.7
+                  )
+                ) %>% 
+                layout(
+                  yaxis = list(
+                    zeroline = F,
+                    title = 'Frequency of Past Participles'
+                  ),
+                  xaxis = list(
+                    title = ''
+                  ),
+                  violinmode = 'group'
+                )
+
+subplot(singularcommonnoun, singularpropernoun, pluralcommonnoun, pluralpropernoun, presentparticiple, pastparticiple, 
+        nrows = 2, titleX = TRUE, titleY = TRUE) %>%
+  layout(annotations = list(
+    list(x = 0.05 , y = 1.00, text = "Singular Common Nouns", showarrow = F, xref='paper', yref='paper'),
+    list(x = 0.50 , y = 1.00, text = "Singular Proper Nouns", showarrow = F, xref='paper', yref='paper'),
+    list(x = 0.90 , y = 1.00, text = "Plural Common Nouns", showarrow = F, xref='paper', yref='paper'),
+    list(x = 0.05 , y = 0.47, text = "Plural Proper Nouns", showarrow = F, xref='paper', yref='paper'),
+    list(x = 0.49 , y = 0.47, text = "Present Participles", showarrow = F, xref='paper', yref='paper'),
+    list(x = 0.89 , y = 0.47, text = "Past Participles", showarrow = F, xref='paper', yref='paper')),
+    title = 'Comparison of Nouns and Participles for Subjective and Objective Articles'
+    )
+```
+
+Our intuitions about participles was correct, and hence we'll be using both types of participles in our reduced feature set. Our assumptions about nouns weren't entirely correct, however. Singular proper and common nouns are used almost as much in both types of articles, but the usage of plural proper and common nouns varies a lot, and hence we'll be using the latter two types of nouns in our feature set as well.  
+
+The final visualization displays comparisons of pronouns and adverbs. First person pronouns (ex. *I*) are expected to be rare in both classes since the authors of articles typically don't mention themselves explicitly, even if they express their opinions in their articles. The distribution of such pronouns will lead to their inclusion or exclusion as it is difficult to make an intuitive judgement on them due to similar use cases. The inclusion of second person pronouns (ex. *you*) is similar, except when authors appeal to readers in subjective articles, in which case such pronouns might become important. Third person pronouns (ex. *he*, *she*) are important since subjective articles might use them a lot more than objective articles because they are lengthier in general, and talk about players in context of situations, whereas objective articles usually summarize games without talking much about players. Adverbs are expected to play a very important role in the classification of articles since they are used extensively in subjective articles to describe situations, games and players. Objective articles, in contrast, use them much more sparingly.  
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.width=9, fig.height=9}
+#str(my_data)
+adverb = plot_ly(my_data,  type = "box") %>%
+    add_boxplot(y = ~freqAdverb[my_data$label == 'objective'], name = 'Objective', 
+          showlegend = FALSE, 
+          marker = list(color = 'rgb(246, 186, 255)'),
+          line = list(color = 'rgb(246, 186, 255)')) %>% 
+    add_boxplot(y = ~freqAdverb[my_data$label == 'subjective'], name = 'Subjective', 
+          showlegend = FALSE, 
+          marker = list(color = 'rgb(249, 109, 115)'),
+          line = list(color = 'rgb(249, 109, 115)')) %>%
+    layout(yaxis = list(title = 'Frequency of Adverbs'))
+
+compadverb = plot_ly(my_data,  type = "box") %>%
+    add_boxplot(y = ~freqCompAdverb[my_data$label == 'objective'], name = 'Objective', 
+          showlegend = FALSE, 
+          marker = list(color = 'rgb(246, 186, 255)'),
+          line = list(color = 'rgb(246, 186, 255)')) %>% 
+    add_boxplot(y = ~freqCompAdverb[my_data$label == 'subjective'], name = 'Subjective', 
+          showlegend = FALSE, 
+          marker = list(color = 'rgb(249, 109, 115)'),
+          line = list(color = 'rgb(249, 109, 115)')) %>%
+    layout(yaxis = list(title = 'Frequency of Comparative Adverbs'))
+
+supadverb = plot_ly(my_data,  type = "box") %>%
+    add_boxplot(y = ~freqSuperAdverb[my_data$label == 'objective'], name = 'Objective', 
+          showlegend = FALSE, 
+          marker = list(color = 'rgb(246, 186, 255)'),
+          line = list(color = 'rgb(246, 186, 255)')) %>% 
+    add_boxplot(y = ~freqSuperAdverb[my_data$label == 'subjective'], name = 'Subjective', 
+          showlegend = FALSE, 
+          marker = list(color = 'rgb(249, 109, 115)'),
+          line = list(color = 'rgb(249, 109, 115)')) %>%
+    layout(yaxis = list(title = 'Frequency of Superlative Adverbs'))
+
+pronoun1st = plot_ly(my_data,  type = "box") %>%
+    add_boxplot(y = ~freqPronounFirst[my_data$label == 'objective'], name = 'Objective', 
+          showlegend = FALSE, 
+          marker = list(color = 'rgb(246, 186, 255)'),
+          line = list(color = 'rgb(246, 186, 255)')) %>% 
+    add_boxplot(y = ~freqPronounFirst[my_data$label == 'subjective'], name = 'Subjective', 
+          showlegend = FALSE, 
+          marker = list(color = 'rgb(249, 109, 115)'),
+          line = list(color = 'rgb(249, 109, 115)')) %>%
+    layout(yaxis = list(title = 'Frequency of First Degree Pronouns'))
+
+pronoun2nd = plot_ly(my_data,  type = "box") %>%
+    add_boxplot(y = ~freqPronounSecond[my_data$label == 'objective'], name = 'Objective', 
+          showlegend = FALSE, 
+          marker = list(color = 'rgb(246, 186, 255)'),
+          line = list(color = 'rgb(246, 186, 255)')) %>% 
+    add_boxplot(y = ~freqPronounSecond[my_data$label == 'subjective'], name = 'Subjective', 
+          showlegend = FALSE, 
+          marker = list(color = 'rgb(249, 109, 115)'),
+          line = list(color = 'rgb(249, 109, 115)')) %>%
+    layout(yaxis = list(title = 'Frequency of Second Degree Pronouns'))
+
+pronoun3rd = plot_ly(my_data,  type = "box") %>%
+    add_boxplot(y = ~freqPronounThird[my_data$label == 'objective'], name = 'Objective', 
+          showlegend = FALSE, 
+          marker = list(color = 'rgb(246, 186, 255)'),
+          line = list(color = 'rgb(246, 186, 255)')) %>% 
+    add_boxplot(y = ~freqPronounThird[my_data$label == 'subjective'], name = 'Subjective', 
+          showlegend = FALSE, 
+          marker = list(color = 'rgb(249, 109, 115)'),
+          line = list(color = 'rgb(249, 109, 115)')) %>%
+    layout(yaxis = list(title = 'Frequency of Third Degree Pronouns'))
+
+subplot(adverb, compadverb, supadverb, pronoun1st, pronoun2nd, pronoun3rd, 
+        nrows = 2, titleX = TRUE, titleY = TRUE) %>%
+  layout(annotations = list(
+    list(x = 0.10 , y = 1.00, text = "Adverbs", showarrow = F, xref='paper', yref='paper'),
+    list(x = 0.50 , y = 1.00, text = "Comparative Adverbs", showarrow = F, xref='paper', yref='paper'),
+    list(x = 0.91 , y = 1.00, text = "Superlative Adverbs", showarrow = F, xref='paper', yref='paper'),
+    list(x = 0.05 , y = 0.47, text = "First Degree Pronouns", showarrow = F, xref='paper', yref='paper'),
+    list(x = 0.49 , y = 0.47, text = "Second Degree Pronouns", showarrow = F, xref='paper', yref='paper'),
+    list(x = 0.93 , y = 0.47, text = "Third Degree Pronouns", showarrow = F, xref='paper', yref='paper')),
+    title = 'Comparison of Adverbs and Pronouns for Subjective and Objective Articles'
+    )
+```
+
+The above visualization confirms our suspicions about adverbs and pronouns. Adverbs are used more often in subjective articles than in objective articles. However, only comparative adverbs show a considerable difference in mean and deviation from the mean. Hence, only comparative adverbs will be selected for our reduced feature set. Similarly, first person pronouns show only a slight difference in terms of mean, the variation from the mean is high enough for the variable to be a significant factor in prediction. Likewise, second person pronouns are also significant for prediction. Third person pronouns vary both in mean and deviation and hence are also important.  
+
+The mean and standard deviation for a few more variables are shown below. These variables are also to be included in the reduced feature set.  
+
+*Special Characters:*  
+
+Mean:  
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Table representation of means:
+tab_spec_char_mean = aggregate(my_data[,c(11, 16, 17, 23, 44)], 
+                              list('Label' = my_data$label), 
+                              FUN=mean)
+
+kable(tab_spec_char_mean)%>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+Standard Deviation:  
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Table representation of standard deviations:
+tab_spec_char_sd = aggregate(my_data[,c(11, 16, 17, 23, 44)], 
+                              list('Label' = my_data$label), 
+                              FUN=sd)
+
+kable(tab_spec_char_sd)%>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+*Other Important Parts of Grammar:*  
+
+Mean:  
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Table representation of means:
+tab_grammar_mean = aggregate(my_data[,c(7, 8, 10, 32)], 
+                              list('Label' = my_data$label), 
+                              FUN=mean)
+
+kable(tab_grammar_mean)%>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+Standard Deviation:  
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Table representation of standard deviations:
+tab_grammar_sd = aggregate(my_data[,c(7, 8, 10, 32)], 
+                              list('Label' = my_data$label), 
+                              FUN=sd)
+
+kable(tab_grammar_sd)%>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+Through our intuition, visualization and analysis, we have chosen a reduced feature set of 35 variables from the given 59 variables in the dataset. In the next section, we will aim to create models for both the full and the reduced dataset and compare models to observe how our reduced dataset performs in comparison to the full dataset. The objective here is to produce a reduced dataset that performs equally or almost equally as well as the full model.
+
+### Modeling and Analysis:  
+
+In this section, we aim to create logistic regression, support vector machine and tree-based models for both our full and reduced datasets and analyse the performance of the models in order to compare models as well as datasets. We split both datasets into training and testing sets, with 750 rows for the training set and 249 rows for the testing set.  
+
+```{r include=FALSE, message=FALSE, warning=FALSE}
+#Creating training and testing samples:
+set.seed(1)
+train = sample(1:nrow(my_data), 750)
+```
+
+#### Logistic Regression:  
+
+Logistic regressiong is a classification technique used for binary classification, and works well if the underlying model is linear since it is an extension of linear regression to categorical variables. We have used this technique to create a base accuracy rate, and to figure out if the underlying model is linear. If the underlying model is indeed linear, we expect this model to perform well for our dataset.  
+
+```{r include=FALSE, message=FALSE, warning=FALSE}
+#Creating training and testing sets:
+log.reg.train = my_data[train, -c(1,2)]
+log.reg.test = my_data[-train, -c(1,2)]
+```
+
+The below diagnostic plots are for a logistic regression model created with label as the response and all other features as the variables.  
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.width=9, fig.height=6}
+#Fitting the model and plotting diagnostics:
+log.reg.model = glm(label~., data = log.reg.train, family = binomial(link = "logit"))
+par(mfrow = c(2,2))
+plot(log.reg.model)
+```
+
+As can be seen from the diagnostic plots, the model does not appear to be linear. The residuals vs fitted values plot does not have an even spread, and the points seem to be arranged in a way that indicates an inverse relationship between the response and predictors. The scale location plot does not have a straight trend, meaning that the errors in the model do not have constant variance. The Q-Q plot has errors almost making up a straight line, indicating that the errors are more or less normally distributed, which is in line with the inherent assumption of logistic regression. In addition to this, the residuals vs leverage plot shows a very influential observation as well, which could be negatively affecting the model.  
+
+The accuracy of the model is:  
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Predicting and calculating accuracy:
+log.reg.pred = predict(log.reg.model, newdata = log.reg.test[,-1])
+log.reg.classified = ifelse(log.reg.pred > 0.5,1,0)
+log.reg.accuracy = sum(diag(table(log.reg.test[,1], log.reg.classified)))/nrow(log.reg.test)
+log.reg.accuracy
+```
+
+The most 10 important predictors for this model at significance = 0.05 in decreasing order of significance are - freqNumeralsCardinal, freqPossessivePronoun, totalWordsCount, freqPluralComNoun, freqExclamationMark, freqWHDeterminer, freqSubPrepConj, freqModalAux, freqListItemMarker and freqQuestionMark.  
+
+Based on the diagnostic plots of the earlier model, and taking into consideration that 53 out of the 59 variables in the dataset are counts, we created an inverse transformed logistic regression model hoping that it would better fit the poisson distributions of the counts if they existed. The diagnostic plots of the transformed model are shown below:  
+
+```{r include=FALSE, message=FALSE, warning=FALSE}
+#Creating a model with inversed transformations of variables:
+log.reg.train.trans = log.reg.train
+count_col = c(2,5:57)
+for(i in 1:length(count_col))
+{
+  for(j in 1:nrow(log.reg.train))
+  {
+    #Creating a transform such that 0 values get converted to 1:
+    log.reg.train.trans[j,count_col[i]] = ifelse(log.reg.train[j,count_col[i]] == 0, 1, (log.reg.train[j,count_col[i]])^-1)
+  }
+}
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.width=9, fig.height=6}
+#Creating a model for the transformed variables:
+log.reg.model.trans = glm(label~., data = log.reg.train.trans, family = binomial(link = "logit"))
+par(mfrow = c(2,2))
+plot(log.reg.model.trans)
+```
+
+The above diagnostic plot shows that the transformed model is better in terms of interpretation. This is because more points on the Q-Q plot fit a straight line, and there are no more influential points in the model based on the residuals vs leverage graph. However, this model does not solve the problem on non-linearity shown in the residuals vs fitted values graph, or the constant variance problem as shown by the scale-location plot. This model is better in terms of interpretation of the model in terms of being a linear model, it still does not prove that the underlying model is indeed a linear model. This is further proved by the accuracy of the transformed model (shown below), which is significantly lower than the non-transformed model.  
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Fitting the model to the test set and calculating accuracy:
+log.reg.pred.trans = predict(log.reg.model.trans, newdata = log.reg.test[,-1])
+log.reg.classified.trans = ifelse(log.reg.pred.trans > 0.5,1,0)
+log.reg.accuracy.trans = sum(diag(table(log.reg.test[,1], log.reg.classified.trans)))/nrow(log.reg.test)
+log.reg.accuracy.trans
+```
+
+Based on the fact that the non-transformed model is better in this case than the inverse transformed model, we also modeled the reduced feature set on the non-transformed model. The diagnostics plot of the model are shown below:  
+
+```{r include=FALSE, message=FALSE, warning=FALSE}
+#Creating the reduced data set:
+log.reg.reduced = my_data[,c(3:8,10:12,16,17,20:23,25,28,32,33,35:37,43:45,47,48,50,52:55,57:59,62)]
+log.reg.reduced.train = log.reg.reduced[train,]
+log.reg.reduced.test = log.reg.reduced[-train,]
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Creating a model for the transformed variables:
+log.reg.model.reduced = glm(label~., data = log.reg.reduced.train, family = binomial(link = "logit"))
+par(mfrow = c(2,2))
+plot(log.reg.model.reduced)
+```
+
+The above plots show that the reduced set produces a more linear model than the non-reduced set. The residuals vs fitted values plot trend is slightly straighter than that of the non-reduced set. While the Q-Q plot is similar to that of the non-reduced set, the scale-location plot is straighter than that of the non-reduced set, although still not ideal. The residuals vs leverage plot is also better than before, although observation 498 continues to be influential.  
+
+The accuracy of the test set for the reduced set is:  
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Fitting the model to the test set and calculating accuracy:
+log.reg.pred.reduced = predict(log.reg.model.reduced, newdata = log.reg.reduced.test[,-1])
+log.reg.classified.reduced = ifelse(log.reg.pred.reduced > 0.5,1,0)
+log.reg.accuracy.reduced = sum(diag(table(log.reg.reduced.test[,1], log.reg.classified.reduced)))/nrow(log.reg.reduced.test)
+log.reg.accuracy.reduced
+```
+
+This shows that the reduced set is more accurate than the non-reduced set assuming that the underlying model is linear.  
+
+However, the diagnostic plots show that the true model for the dataset is not linear. Hence, we moved on to non-linear models like Support Vector Machines and Decision Tree based models.  
+
+#### Support Vector Machines:    
+
+Support Vector Machines perform linear and non-linear classificationi by creating hyperplanes between classes. It is also known that SVMs work better with less amounts of data, which suits our dataset. SVMs usually need to be tuned for gamma and cost function. High values of gamma indicate influence of a training example and high cost function means high variance of the model. Kernel based SVMs are used for non-linear models. Since we suspect our model to be non-linear, we will use *kernel = 'radial'* for our SVMs and tune them for gamma and cost for both the full and reduced feature sets.
+
+```{r message=FALSE, warning=FALSE}
+#Creating feature set for training and testing datasets:
+X = my_data[,-(1:3)] 
+
+X_train = X[train,]
+X_test = X[-train,]
+
+#Creating labels for training and testing datasets:
+y = as.factor(my_data[,3])
+y_train = y[train]
+y_test = y[-train]
+```
+
+The tuned parameters (using 10-fold cross validation) for the full feature set are:  
+
+```{r message=FALSE, warning=FALSE}
+#Tuning SVM for the full model:
+tuned.params <- tune.svm(X_train, y_train, gamma = 10^(-5:-1), cost = 10^(-3:1))
+
+#Getting best values for gamma:
+gamma.full = tuned.params$best.parameters[,1]
+gamma.full
+
+#Getting best values for cost
+cost.full = tuned.params$best.parameters[,2]
+cost.full
+```
+
+It can be inferred from the high value of the cost function that due to the small dataset, the SVM is creating a high variance model to improve the accuracy of predictions. The low value of gamma is good for the model since it will reduce the influence of the observations that were hampering the predictions of the logistic regression model.  
+
+Using the above values to predict the test dataset and its accuracy:  
+
+```{r message=FALSE, warning=FALSE}
+#Fitting the full model with the best values:
+svm.fit.full = svm(X_train, y_train, scale = TRUE, kernel = "radial", gamma = gamma.full, cost = cost.full)
+
+#Predicting the test set of the full model and calculating its accuracy:
+svm.pred.full = predict(svm.fit.full, newdata = X_test)
+svm.accuracy.full = sum(diag(table(svm.pred.full, y_test)))/length(y_test)
+svm.accuracy.full
+```
+
+It can be seen that the SVM is an improvement on the logistic regression model.  
+
+Next, tuning the SVM for the reduced feature set using 10-fold cross validation:  
+
+```{r include=FALSE, message=FALSE, warning=FALSE}
+#Preparing data for the reduced model:
+X_train = X_train[,-c(6,10,11,12,15,16,21,23,24,26,27,28,31,35,36,37,38,39,43,46,48,53,57,58)]
+X_test = X_test[,-c(6,10,11,12,15,16,21,23,24,26,27,28,31,35,36,37,38,39,43,46,48,53,57,58)]
+```
+
+```{r message=FALSE, warning=FALSE}
+#Tuning SVM for the full model:
+tuned.params..reduced <- tune.svm(X_train, y_train, gamma = 10^(-5:-1), cost = 10^(-3:1))
+
+#Getting best values for gamma:
+gamma.reduced = tuned.params..reduced$best.parameters[,1]
+gamma.reduced
+
+#Getting best values for cost
+cost.reduced = tuned.params..reduced$best.parameters[,2]
+cost.reduced
+```
+
+The reduced feature set leads to a change in the values of gamma. The model becomes less variable due to less features being present, but each observation now becomes more influential.  
+
+Predicting the test observations and finding the accuracy of the reduced feature set:  
+
+```{r message=FALSE, warning=FALSE}
+#Fitting the full model with the best values:
+svm.fit.reduced = svm(X_train, y_train, scale = TRUE, kernel = "radial", gamma = gamma.reduced, cost = cost.reduced)
+
+#Predicting the test set of the full model and calculating its accuracy:
+svm.pred.reduced = predict(svm.fit.reduced, newdata = X_test)
+svm.accuracy.reduced = sum(diag(table(svm.pred.reduced, y_test)))/length(y_test)
+svm.accuracy.reduced
+```
+
+It can be seen that there is a slight increase in the accuracy for the reduced dataset, implying that the eliminated features were not important and adding noise to the model. 
+
+A disadvantage of SVMs is that the lack of post modeling analysis that can be done on the models. Due to this, we weren't able to show plots for variable importance, etc.  
+
+#### Decision Trees - Random Forests:  
+
+Random forests are an implementation for decision trees that build models by randomly selecting variables from the dataset. They work very well with datasets that have large numbers of variables, and hence are an ideal model for the given dataset.  
+
+We fit a random forest model using the complete feature set. We start by using the default setting of the randomForest() function. Then we proceed to tune mtry, ntree, nodesize, and sample size. Since some of the features may be noisy, we compute the importance of the variables as well and will use that to consider what variables to drop in the final models.  
+
+```{r include=FALSE, message=FALSE, warning=FALSE}
+#Preparing data for the full model:
+X = my_data[,-c(1:3, 19, 42)] 
+
+X_train = X[train,]
+X_test = X[-train,]
+
+y = as.factor(my_data[,3])
+y_train = y[train]
+y_test = y[-train]
+```
+
+We chose to tune the following parameters for the random forest models:  
+*mtree:* we expect to have better accuracies for higher values of mtree  
+*mty:* is ideally close to the square root of the total number of variables, but we expect some variation here since different parts of speech can be important in different ways while predicting classes for the articles  
+*nodesize:* is expected to be 1 for this model  
+*sampsize:* should be large to avoid overfitting  
+
+```{r message=FALSE, warning=FALSE}
+#Creating a grid of tuning parameter combinations with extra columns to store error rates:
+tune_grid <- expand.grid(
+              ntree = c(500,1000,1500),
+              mtry = c(1, 3, 7, 10, 15, 20, 25, 30, 35, 40, 45, 50),
+              nodesize = c(1, 3, 5, 7, 9),
+              sampsize = c(325,650,nrow(X_train)), 
+              training_error = 0,
+              OOB_error = 0
+            )
+```
+
+
+```{r include=FALSE, message=FALSE, warning=FALSE}
+#Fitting models for all parameter combinations and obtaining their training and out-of-bag error: 
+for (i in 1:nrow(tune_grid)){
+  #Fitting the model for each row of the grid:
+  rf_fit = randomForest(X_train, y_train, 
+                        ntree = tune_grid[i,1],
+                        mtry = tune_grid[i,2],
+                        nodesize = tune_grid[i,3],
+                        sampsize = tune_grid[i,4], 
+                        importance = TRUE
+                        )
+  
+  #Storing values of the lowest training and out of bag errors:
+  tune_grid$training_error[i] = 1 - sum(diag(rf_fit$confusion))/length(y_train)
+  tune_grid$OOB_error[i] = rf_fit$err.rate[tune_grid$ntree[i]]
+}
+```
+
+The best values of the tuning parameters are:  
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Parameters resulting in minimum out of bag error:
+best_values = tune_grid[which.min(tune_grid$OOB_error),]
+kable(best_values)%>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+It is immediately noticeable that the value of mtry is larger than expected.  
+
+The accuracy of the model is:  
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Fitting the model using the best values of the tuning parameters:
+best_fit = randomForest(X_train, y_train, 
+                        ntree = as.numeric(best_values[1]), 
+                        mtry = as.numeric(best_values[2]), 
+                        nodesize = as.numeric(best_values[3]), 
+                        sampsize = as.numeric(best_values[4]),
+                        importance = TRUE
+                        )
+
+#calculating the accuracy of the model on the testing data
+y_pred = predict(best_fit, newdata = X_test)
+rand.for.accuracy = sum(diag(table(y_pred,y_test)))/length(y_test)
+rand.for.accuracy
+```
+
+```{r include=FALSE, message=FALSE, warning=FALSE}
+#Preparing data for the reduced set:
+X_train = X_train[,-c(6,10,11,12,15,20,22,23,25,26,27,30,34,35,36,37,41,44,46,51,55,56)]
+X_test = X_test[,-c(6,10,11,12,15,20,22,23,25,26,27,30,34,35,36,37,41,44,46,51,55,56)]
+```
+
+```{r include=FALSE, message=FALSE, warning=FALSE}
+#creating a grid of tuning parameter combinations with extra columns to store error rates
+tune_grid2 <- expand.grid(
+  ntree = c(500,1000,1500),
+  mtry = c(1, 3, 7, 10, 15, 20, 25, 30, 35),
+  nodesize = c(1, 3, 5, 7, 9),
+  sampsize = c(325,650,nrow(X_train)), 
+  training_error = 0,
+  OOB_error = 0
+)
+```
+
+```{r include=FALSE, message=FALSE, warning=FALSE}
+#fitting models for all parameter combinations and obtaining their training and out-of-bag error 
+for (i in 1:nrow(tune_grid2)){
+  rf_fit = randomForest(X_train, y_train,
+                        ntree = tune_grid2[i,1],
+                        mtry = tune_grid2[i,2],
+                        nodesize = tune_grid2[i,3],
+                        sampsize = tune_grid2[i,4], 
+                        importance = TRUE)
+  
+  tune_grid2$training_error[i] = 1 - sum(diag(rf_fit$confusion))/length(y_train)
+  tune_grid2$OOB_error[i] = rf_fit$err.rate[tune_grid2$ntree[i]]
+}
+```
+
+The best values of the tuning parameters are:  
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#parameters resulting in minimum out of bag error
+best_values2 = tune_grid2[which.min(tune_grid2$OOB_error),]
+kable(best_values2)%>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+The value of mtry for the reduced feature set is also larger than expected.  
+
+The accuracy for the reduced feature set is:  
+
+```{r message=FALSE, warning=FALSE}
+best_fit2 = randomForest(X_train,y_train, 
+                         ntree = as.numeric(best_values2[1]), 
+                         mtry = as.numeric(best_values2[2]), 
+                         nodesize = as.numeric(best_values2[3]), 
+                         sampsize = as.numeric(best_values2[4]),
+                         importance = TRUE)
+
+#calculating the accuracy of the model on the testing data
+y_pred2 = predict(best_fit2, newdata = X_test)
+rand.for.accuracy.reduced = sum(diag(table(y_pred2,y_test)))/length(y_test)
+rand.for.accuracy.reduced
+```
+
+For random forests (unlike for the logistic regression and SVM models), the accuracy of the reduced set tends to be lower than that of the full set. This can be attributed to the decrease in variables for the reduced set, which might hamper the performance of the model. We ran the tuning and fitting code five times to account for the randomization occuring within the algorithm while sapmling and selecting variables, and each time the accuracy of the full model was more than that of the reduced model.  
+
+The variance importance plots for both models are shown below:  
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.width=9, fig.height=9}
+varImpPlot(best_fit, main = 'Variance Importance Plot for the Full Model')
+varImpPlot(best_fit2, main = 'Variance Importance Plot for the Reduced Model')
+```
+
+The plots show that list item markers and possessive pronouns are the most important variables for both models as per the Mean Decrease Gini. The values of Mean Decrease Gini for the same variables are higher in the reduced model than in the full model, presumably due to the fact that there are less variables in the reduced model. The random forest models have at most only 3 top 10 variables in common with the logistic regression model, implying that a completely different approach in fitting and predicting between the two methods.  
+
+The trade-off for high accuracy for random forests is the computation time for the algorithm. Our tuning and fitting code took around one hour to run. A quicker way of achieving high accuracy in lesser time would be to use boosted trees.    
+
+#### Boosted Decision Trees - XGBoost:  
+
+Boosted decision trees create a single tree and modify it sequentially based on the errors of the previous model. XGBoos is a boosted decision tree algorithm that provides a high degree of tuning while being extremely accurate and fast. The only suspicion we had of XGBoost while using it was that the dataset wasn't large enough to fit a tree with a high degree of accuracy. On the other hand, its high speed of execution and the non-linear structure of the dataset convinced us to try this model out for both our full and reduced datasets.  
+
+```{r include=FALSE, message=FALSE, warning=FALSE}
+#Creating training set and converting labels to numerical values:
+dec.tree.xgb.train = my_data[train, -c(1,2)]
+dec.tree.xgb.train$label = as.numeric(dec.tree.xgb.train$label)
+dec.tree.xgb.train$label = dec.tree.xgb.train$label - 1
+
+#Creating test set and converting labels to numerical values:
+dec.tree.xgb.test = my_data[-train, -c(1,2)]
+dec.tree.xgb.test$label = as.numeric(dec.tree.xgb.test$label)
+dec.tree.xgb.test$label = dec.tree.xgb.test$label - 1
+
+#Creating an XGB matrix to enter as input for the XGBoost function:
+xgb.mat = xgb.DMatrix(data = as.matrix(dec.tree.xgb.train[,-1]), label = as.matrix(dec.tree.xgb.train[,1]))
+
+#Creating the reduced data set:
+dec.tree.xgb.reduced = my_data[,c(3:8,10:12,16,17,20:23,25,28,32,33,35:37,43:45,47,48,50,52:55,57:59,62)]
+
+#Creating reduced training set and converting labels to numerical values:
+dec.tree.xgb.reduced.train = dec.tree.xgb.reduced[train,]
+dec.tree.xgb.reduced.train$label = as.numeric(dec.tree.xgb.reduced.train$label)
+dec.tree.xgb.reduced.train$label = dec.tree.xgb.reduced.train$label - 1
+
+#Creating reduced test set and converting labels to numerical values:
+dec.tree.xgb.reduced.test = dec.tree.xgb.reduced[-train,]
+dec.tree.xgb.reduced.test$label = as.numeric(dec.tree.xgb.reduced.test$label)
+dec.tree.xgb.reduced.test$label = dec.tree.xgb.reduced.test$label - 1
+
+#Creating an XGB matrix to enter as input for the XGBoost function:
+xgb.mat.reduced = xgb.DMatrix(data = as.matrix(dec.tree.xgb.reduced.train[,-1]), label = as.matrix(dec.tree.xgb.reduced.train[,1]))
+```
+
+*Tuning the tree:*  
+
+One of the main advantages of XGBoost is the amount of tuning that can be achieved by this algorithm while being computationally fast. For our model, we chose to tune the following parameters:  
+*eta:* is the learning rate of the tree. Given that our dataset is small, we expect this value to be small.  
+*max_depth:* is ideally 1 for classification data.  
+*min_child_weight:* is used to control overfitting and defines the minimum sum of weights of all observations required in a child. Low values can lead to overfitting and high values can lead to underfitting.  
+*subsample:* is the fraction of observations that are selected as samples of trees. This value should be low to prevent over-fitting, but not too low so as to avoid underfitting.  
+*colsample_bytree:* is the fraction of columns to be assigned to each tree. Should be high to improve accuracy.  
+
+We use 5-fold cross-validation to train the model, and select the best values of the tuning parameters based on the mean test error values.
+
+Below is the code for a grid created with the range of values for each of the above-mentioned parameters:  
+
+```{r message=FALSE, warning=FALSE}
+#Creating a grid with possible values of tuning parameters:
+hyper_grid = expand.grid(
+                        eta = c(.01, .05, .1, .3),
+                        max_depth = c(1, 3, 5, 7, 9),
+                        min_child_weight = c(1, 3, 5, 7),
+                        subsample = c(0.5, .65, .8, 1), 
+                        colsample_bytree = c(.8, .9, 1),
+                        min_test_error_mean = 0,                     #A variable to store the mean test error for each iternation
+                        min_test_error_mean_reduced = 0              #A variable to store the mean test error for each iternation for the reduced set
+                      )
+```
+
+A few caveats regarding the XGBoost model are:  
+1.  Since all the variables are already number values, the only encoding required was for the label to be converted to a number.  
+2.  Since the logistic regression model proved that the underlying model is not linear, we have used *booster = 'gbtree'* for the model.  
+3.  In order to make the model complutionally less expensive, we have used *early_stopping_rounds = 10* for each iteration of the cross-validated tuning.  
+
+```{r include=FALSE, message=FALSE, warning=FALSE}
+#Beginning iterations for each combination of values in the grid:
+for(i in 1:nrow(hyper_grid)) {
+  #Storing the values of each column of the current row of the grid as the respective parameters:
+  parameters =  list(
+                  eta = hyper_grid$eta[i],
+                  max_depth = hyper_grid$max_depth[i],
+                  min_child_weight = hyper_grid$min_child_weight[i],
+                  subsample = hyper_grid$subsample[i],
+                  colsample_bytree = hyper_grid$colsample_bytree[i]
+                )
+  
+  #Ensuring the same results for each run of the loop:
+  set.seed(1)
+  
+  #Tuning the model on the full data set using cross validation:
+  xgb.tune = xgb.cv(
+                    params = parameters,
+                    data = xgb.mat,
+                    nrounds = 5000,
+                    nfold = 5,
+                    objective = "binary:logistic",  
+                    verbose = 0,               
+                    early_stopping_rounds = 10, 
+                    booster = 'gbtree'
+                  )
+  
+  #Tuning the model on the full data set using cross validation:
+  xgb.tune.reduced = xgb.cv(
+                            params = parameters,
+                            data = xgb.mat.reduced,
+                            nrounds = 5000,
+                            nfold = 5,
+                            objective = "binary:logistic",  
+                            verbose = 0,               
+                            early_stopping_rounds = 10, 
+                            booster = 'gbtree'
+                          )
+  
+  #Storing the values minimum mean test errors for the full and reduced sets:
+  hyper_grid$min_test_error_mean[i] = min(xgb.tune$evaluation_log$test_error_mean)
+  hyper_grid$min_test_error_mean_reduced[i] = min(xgb.tune.reduced$evaluation_log$test_error_mean)
+
+}
+```
+
+The best parameters for the full set are:  
+
+```{r message=FALSE, warning=FALSE}
+kable(hyper_grid[which.min(hyper_grid$min_test_error_mean),])%>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+The best parameters for the reduced set are:  
+
+```{r message=FALSE, warning=FALSE}
+kable(hyper_grid[which.min(hyper_grid$min_test_error_mean_reduced),]) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+Since the observations and columns in sub_sample and colsample_bytree are selected randomly, the algorithm can give different values of accuracy each time it is run. Hence, in an attempt to reduce the randomness, we ran the fitting and predicting code 10 times and averaged out the accuracies in order to come to a final result.  
+
+The accuracy for the full model is:
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+xgb.accuracy = vector(length = 10)
+for(i in 1:length(xgb.accuracy))
+{
+  #Fitting the model:
+  xgb.model.fit = xgboost(data = xgb.mat, 
+                        objective = "binary:logistic", 
+                        nrounds = 2500, 
+                        verbose = 0, 
+                        booster = 'gbtree',
+                        eta = hyper_grid$eta[which.min(hyper_grid$min_test_error_mean)],
+                        max_depth = hyper_grid$max_depth[which.min(hyper_grid$min_test_error_mean)],
+                        min_child_weight = hyper_grid$min_child_weight[which.min(hyper_grid$min_test_error_mean)],
+                        subsample = hyper_grid$subsample[which.min(hyper_grid$min_test_error_mean)],
+                        colsample_bytree = hyper_grid$colsample_bytree[which.min(hyper_grid$min_test_error_mean)]
+                        )
+  
+  #Predicting labels for the test set:
+  xgb.pred = predict(xgb.model.fit, newdata = as.matrix(dec.tree.xgb.test[,-1]))
+  classified.pred = as.numeric(xgb.pred > 0.5)
+  
+  #Accuracy:
+  xgb.accuracy[i] = sum(diag(table(as.matrix(dec.tree.xgb.test[,1]), classified.pred)))/nrow(dec.tree.xgb.test)
+}
+mean(xgb.accuracy)
+```
+
+The accuracy of the reduced model is:  
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+xgb.accuracy.reduced = vector(length = 10)
+for(i in 1:length(xgb.accuracy.reduced))
+{
+  #Fitting the model:
+  xgb.model.fit.reduced = xgboost(data = xgb.mat.reduced, 
+                                objective = "binary:logistic", 
+                                nrounds = 2500, 
+                                verbose = 0, 
+                                booster = 'gbtree',
+                                eta = hyper_grid$eta[which.min(hyper_grid$min_test_error_mean_reduced)],
+                                max_depth = hyper_grid$max_depth[which.min(hyper_grid$min_test_error_mean_reduced)],
+                                min_child_weight = hyper_grid$min_child_weight[which.min(hyper_grid$min_test_error_mean_reduced)],
+                                subsample = hyper_grid$subsample[which.min(hyper_grid$min_test_error_mean_reduced)],
+                                colsample_bytree = hyper_grid$colsample_bytree[which.min(hyper_grid$min_test_error_mean_reduced)]
+                                )
+  
+  #Predicting labels for the test set:
+  xgb.pred.reduced = predict(xgb.model.fit.reduced, newdata = as.matrix(dec.tree.xgb.reduced.test[,-1]))
+  classified.pred.reduced = as.numeric(xgb.pred.reduced > 0.5)
+  
+  #Accuracy:
+  xgb.accuracy.reduced[i] = sum(diag(table(as.matrix(dec.tree.xgb.reduced.test[,1]), classified.pred.reduced)))/nrow(dec.tree.xgb.reduced.test)
+}
+mean(xgb.accuracy.reduced)
+```
+
+It can be seen that XGBoost has very close values of accuracy for the full and reduced feature sets (the accuracy of the reduced set is higher than that of the full set in some cases), which is a good sign since it indicates that the reduced set performs as well as the full set, meaning that the feature selection was efficient. The accuracy of the full model is close to that of the SVM, while that of the reduced model is greater than that of the SVM.  
+
+The 10 most important variables for the full and reduced feature sets can be seen in the plots below:  
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.width=9, fig.height=6}
+var.imp = xgb.importance(model = xgb.model.fit)
+var.imp.reduced = xgb.importance(model = xgb.model.fit.reduced)
+
+par(mfrow = c(2,2))
+xgb.plot.importance(importance_matrix = var.imp[1:10,])
+xgb.plot.importance(importance_matrix = var.imp.reduced[1:10,])
+```
+
+It is easily observered from the above plots that list item markers are the most important variables in both sets, followed by possessive pronouns. This is in contrast to the best 10 variables for logistic regression, for which list item markers were 9th most important. The rest of the important variables for the two sets are mostly the same (7 out of the 10 variables are the same for both models), but have different magnitudes of importance.  
+
+In comparison to the random forest model, XGBoos takes only half as much time while being more accurate for the reduced model.  
+
+### Conclusion  
+
+#### Variable Importance:  
+
+List item markers, possessive pronouns, question marks, quotes and present tense plural verbs are present as the 5 of the top 10 or 15 variables in each model. List item markers are primarily used by authors of objective articles to express facts as lists, while the rest of the 4 variables are used by authors of subjective articles for descriptive purposes. So, it makes sense that they are important in classifying articles as objective or subjective.   
+
+#### Model Comparison:  
+
+The accuracies for the full feature set for all the models are:  
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+tab.acc.full = cbind.data.frame('Logistic Regression' = log.reg.accuracy, 'Support Vector Machines' = svm.accuracy.full, 'Random Forest' = rand.for.accuracy, 'Boosted Tree' = mean(xgb.accuracy))
+
+kable(tab.acc.full) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+The accuracies for the reduced feature set for all the models are:  
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+tab.acc.reduced = cbind.data.frame('Logistic Regression' = log.reg.accuracy.reduced, 'Support Vector Machines' = svm.accuracy.reduced, 'Random Forest' = rand.for.accuracy.reduced, 'Boosted Tree' = mean(xgb.accuracy.reduced))
+
+kable(tab.acc.reduced) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+For the current dataset, SVMs perform the best (slightly better than XGBoost) considering the size of the dataset, the prediction accuracy and computation time. However, if the dataset was to be scaled up, we'd recommend using boosted trees due to their tendency to increase in accuracy with increase in data.  
+For three of the four algorithms used, the reduced dataset performed better that the full dataset indicating that the variable selection removed noise from the data and improved the prediction performance of the algorithms.  
+
+#### Possible Improvements:  
+
+1.  *Unbalanced Dataset:* the dataset has 1000 rows in total - 650 for obejctive articles and 350 for subjective articles. Due to this imbalance, a consistent problem with all of our models was that the misclassification for subjective articles was more than that for the objective articles. If a more balanced dataset were available, we would hope to see improvements in the accuracies of all our models.  
+
+2.  *Variable selection:* since we have shown in 3 out of our 4 models that feature selection helps improve the accuracy of the classification, it might be worth the effort to try to exclude more unimportant variables from the feature set and test out the models with the new sets. Further reduction of features might lead to improved accuracies.  
+
+3.  *Limited Data:* in most cases, boosted trees outperform SVMs. However, in our case, the SVM model is as good as if not better than the boosted tree model. If more data were available, the boosted tree prediction would increase in accuracy as it would be able to sequentially learn more and improve upon itself, leading to higher accuracies.  
+
+4.  *XGBoost Tuning:* we have tuned our XGBoost model using mean test error as the *eval_metric*. If time permitted, we could have used other metrics as well such as auc and logloss to create better inferences from the models and maybe even have better accuracies.  
+
+5.  *Random Forest Tuning:* due to time constraints and knowing that the random forest algorithm takes time to run, we did not exceed the value of 1500 for *ntree*. Given more time, that value can be increased to up to 5000 to get better accuracies. Overfitting would need to be investigated, though.  
+
+6.  *Count Based Data:* we observed that inverse transforming all the variables did not work for the logistic regression model. However, further analysis can be conducted to transform only certain variables displaying Poisson distributions and check if that improves the model.  
+
+
+___________________________________________________________________________________________________________________________________________________________
+
+
+
+
+
+
+
+
+
+
+
+
+
